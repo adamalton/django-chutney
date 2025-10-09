@@ -23,7 +23,7 @@ pip install beautifulsoup4>=4
 ```
 
 ```python
-from chutney.test.testcases import FormTestCase, SoupCase
+from django_chutney.test.testcases import FormTestCase, SoupCase
 
 class MyTestCase(SoupSoup):
 

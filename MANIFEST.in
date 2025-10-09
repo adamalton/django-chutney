@@ -1,4 +1,4 @@
-recursive-include chutney *.py
-recursive-include chutney/templates *
-prune chutney/tests/
+recursive-include django_chutney *.py
+recursive-include django_chutney/templates *
+prune django_chutney/tests/
 global-exclude *.DS_Store
