@@ -40,6 +40,16 @@ class SoupCase(TestCase):
             if parsed.path == expected_path and parse.parse_qs(parsed.query) == expected_query:
                 return
         self.fail(f"Link with href '{url}' not found in HTML:\n{soup}")
+    def find_element_containing_text(self, soup, text, tag=None, exact=False):
+        """Find an element in the given soup that contains the given text."""
+        for element in soup.find_all(tag or True):
+            if text in element.text:
+                if tag and element.name != tag:
+                    continue
+                if exact and element.text == text:
+                    return element
+                return element
+        self.fail(f"Element containing text '{text}' not found in HTML:\n{soup.prettify()}")
 
 
 class FormTestCase(TestCase):
