@@ -26,9 +26,9 @@ class SoupCase(TestCase):
             return
         # Case when the text is somewhere within a child element in the soup
         element = soup.find(tag or True, string=search)
-        self.assertIsNotNone(element, msg=f"Couldn't find text '{text}' in HTML:\n{soup}")
+        self.assertIsNotNone(element, msg=f"Couldn't find text '{text}' in HTML:\n{soup.prettify()}")
 
-    def assert_link_in_soup(self, soup, url):
+    def assert_link_in_soup(self, url, soup):
         """Assert that there's at least one <a/> with the given URL (or equivalent URL with the query
         params in a different order) as its href in the given soup element.
         """
@@ -39,7 +39,8 @@ class SoupCase(TestCase):
             parsed = parse.urlparse(link.get("href", ""))
             if parsed.path == expected_path and parse.parse_qs(parsed.query) == expected_query:
                 return
-        self.fail(f"Link with href '{url}' not found in HTML:\n{soup}")
+        self.fail(f"Link with href '{url}' not found in HTML:\n{soup.prettify()}")
+
     def find_element_containing_text(self, soup, text, tag=None, exact=False):
         """Find an element in the given soup that contains the given text."""
         for element in soup.find_all(tag or True):
