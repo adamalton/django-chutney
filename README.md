@@ -45,3 +45,16 @@ class MyFormTestCase(FormTestCase):
         post_response = self.submit_form(response, "#my-form", data)
         self.assertEqual(post_response.status_code, 302)
 ```
+
+
+## Template tags & filters
+
+```html
+{% load chutney_tags %}
+<p>
+    Use a variable in the template as a key/attribute to extract an item from a dict/object:
+</p>
+<p>
+    {{ my_dict|get:my_var }}
+</p>
+```
