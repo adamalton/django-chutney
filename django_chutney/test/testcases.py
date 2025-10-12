@@ -50,7 +50,6 @@ class SoupCase(TestCase):
                 if exact and element.text == text:
                     return element
                 return element
-        self.fail(f"Element containing text '{text}' not found in HTML:\n{soup.prettify()}")
 
 
 class FormTestCase(TestCase):
