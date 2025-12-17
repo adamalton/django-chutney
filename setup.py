@@ -5,11 +5,10 @@ import re
 
 PACKAGES = find_packages()
 REQUIREMENTS = ["django >=3.2,<6.0"]
-# TEST_REQUIREMENTS = ["coverage"]
-# EXTRAS_REQUIRE = {
-#     "quality": ["isort", "flake8"],
-#     "test": TEST_REQUIREMENTS,
-# }
+TEST_REQUIREMENTS = ["BeautifulSoup4"]
+EXTRAS_REQUIRE = {
+    "bs4": ["BeautifulSoup4"],
+}
 CLASSIFIERS = [
     "License :: OSI Approved :: MIT License",
     "Framework :: Django",
@@ -46,8 +45,8 @@ setup(
     include_package_data=True,
     python_requires=">=3.8",
     install_requires=REQUIREMENTS,
-    # tests_require=TEST_REQUIREMENTS,
-    # extras_require=EXTRAS_REQUIRE,
+    tests_require=TEST_REQUIREMENTS,
+    extras_require=EXTRAS_REQUIRE,
     # test_suite="runtests.runtests",
     keywords=["django"],
     classifiers=CLASSIFIERS,
