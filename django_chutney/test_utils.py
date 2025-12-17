@@ -1,9 +1,10 @@
 # Standard Library
+from dataclasses import dataclass, field
 from urllib import parse
 import re
 
 # Third Party
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 
 class SoupHelper:
@@ -71,68 +72,107 @@ class FormHelper:
         # Look at what fields are in the form to work out what data keys are allowed and what the
         # allowed values for selects/radio buttons are. Does not yet support validation of 'range'
         # inputs.
-        data_to_submit = {}
-        allowed_keys = set()
-        allowed_value_restrictions = {}
-        fixed_values = {}
+        # data_to_submit = {}
+        # allowed_keys = set()
+        # allowed_value_restrictions = {}
+        # fixed_values = {}
+
+        form_spec: dict[str, FieldSpec] = {}
+
         for input_ in inputs:
             name = input_.get("name")
+            typ = input_.get("type", "text")
+            if typ in ("checkbox", "radio"):
+                if get_boolean_attribute(input_, "checked"):
+                    default_value = input_.get("value", "")
+                else:
+                    default_value = None
+            else:
+                default_value = input_.get("value", "")
             if name:
-                allowed_keys.add(name)
-                typ = input_.get("type")
-                value = input_.get("value")
-                if value:
-                    if typ in ("text", "email", "number"):
-                        data_to_submit[name] = value
-                    elif typ == "hidden":
-                        data_to_submit[name] = value
-                        fixed_values[name] = value
-                    elif typ in ["checkbox", "radio"]:
-                        allowed_value_restrictions.setdefault(name, []).append(value)
-                        if input_.get("checked"):
-                            data_to_submit[name] = value
+                if name not in form_spec:
+                    form_spec[name] = FieldSpec(
+                        name=name,
+                        type=typ,
+                        disabled=get_boolean_attribute(input_, "disabled"),
+                        default_value=default_value,
+                        allowed_multiple=typ == "checkbox",
+                        allowed_values=[input_.get("value", "")],  # Only relevant for checkbox/radio/submit
+                    )
+                else:
+                    # This could be a susequent input for a set of radio buttons or checkboxes, or alternative submit button
+                    if input_.get("type") in ("radio", "checkbox", "submit"):
+                        form_spec[name].allowed_values.append(input_.get("value"))
+                    elif input_.get("type") != "reset":
+                        raise ValueError(f"Multiple different input types for field '{name}'.")
 
         for textarea in textareas:
             name = textarea.get("name")
             if name:
-                allowed_keys.add(name)
-                data_to_submit[name] = textarea.text
+                if name not in form_spec:
+                    form_spec[name] = FieldSpec(
+                        name=name,
+                        type="textarea",
+                        disabled=get_boolean_attribute(textarea, "disabled"),
+                        default_value=textarea.text,
+                    )
+                else:
+                    raise ValueError(f"Multiple different textarea fields for field '{name}'.")
 
         for select in selects:
             name = select.get("name")
             if name:
-                allowed_keys.add(name)
-                allowed_value_restrictions.setdefault(name, [])
-                for option in select.select("option"):
-                    value = option.get("value")
-                    if value:
-                        allowed_value_restrictions[name].append(value)
-                        if option.get("selected"):
-                            data_to_submit[name] = value
+                if name not in form_spec:
+                    field_spec = FieldSpec(
+                        name=name,
+                        type="select",
+                        disabled=get_boolean_attribute(select, "disabled"),
+                        allowed_multiple=get_boolean_attribute(select, "multiple"),
+                    )
+                    form_spec[name] = field_spec
+                    for option in select.select("option"):
+                        value = option.get("value") or option.text
+                        field_spec.allowed_values.append(value)
+                        selected = get_boolean_attribute(option, "selected")
+                        if selected and field_spec.default_value and not field_spec.allowed_multiple:
+                            raise ValueError(f"Field '{name}' has got multiple pre-selected options.")
+                        if selected:
+                            field_spec.default_value = value
+                else:
+                    raise ValueError(f"Multiple different select fields for field '{name}'.")
+
+        # Build default data form the form fields as a starting point
+        data_to_submit = {}
+        for key, field_spec in form_spec.items():
+            if field_spec.should_auto_include:
+                data_to_submit[key] = field_spec.default_value
 
         # Validate that the supplied data values are allowed, and build the final data to submit.
         for key, value in data.items():
             value = str(value)  # All HTTP GET/POST values are strings
-            if key not in allowed_keys:
+            if key not in form_spec:
                 raise ValueError(
                     f"'{key}' is not an allowed key for the form '{form_selector}'. "
-                    f"Allowed keys are: {', '.join(allowed_keys)}."
+                    f"Allowed keys are: {', '.join(form_spec.keys())}."
                 )
-            if key in allowed_value_restrictions:
-                allowed_values = allowed_value_restrictions[key]
-                # Support the submission of multiple values for the same key
-                values_to_test = value if isinstance(value, (list, tuple, set)) else [value]
-                for val in values_to_test:
-                    if val not in allowed_values:
-                        raise ValueError(
-                            f"'{val} is not an allowed value for field '{key}'. "
-                            f"Allowed values are: {', '.join(allowed_values)}."
-                        )
-            if key in fixed_values:
-                raise ValueError(
-                    f"Form field '{key}' has a fixed value of '{fixed_values[key]}'. You can't specify a value for it."
-                )
+            form_spec[key].validate_value(value)
             data_to_submit[key] = value
+
+            # if key in allowed_value_restrictions:
+            #     allowed_values = allowed_value_restrictions[key]
+            #     # Support the submission of multiple values for the same key
+            #     values_to_test = value if isinstance(value, (list, tuple, set)) else [value]
+            #     for val in values_to_test:
+            #         if val not in allowed_values:
+            #             raise ValueError(
+            #                 f"'{val} is not an allowed value for field '{key}'. "
+            #                 f"Allowed values are: {', '.join(allowed_values)}."
+            #             )
+            # if key in fixed_values:
+            #     raise ValueError(
+            #         f"Form field '{key}' has a fixed value of '{fixed_values[key]}'. You can't specify a value for it."
+            #     )
+            # data_to_submit[key] = value
 
         # Submit the form with our data
         action = form.get("action") or response.request["PATH_INFO"]
@@ -140,3 +180,47 @@ class FormHelper:
         if method not in ("get", "post"):
             raise ValueError(f"Form '{form_selector}' has a method of '{method}'. Must be 'get' or 'post'.")
         return getattr(self.client, method)(action, data=data_to_submit)
+
+
+@dataclass
+class FieldSpec:
+    """Specification of a form field."""
+
+    name: str  # Duplication of the dict keys, but helps with error messages.
+    type: str
+    disabled: bool = False
+    default_value: str | list[str] | None = None
+    allowed_values: list[str] = field(default_factory=list)
+    allowed_multiple: bool = False
+
+    @property
+    def editable(self) -> bool:
+        return self.type not in ("hidden", "submit", "image", "reset") and not self.disabled
+
+    @property
+    def should_auto_include(self) -> bool:
+        return self.default_value is not None and self.type not in ("submit", "reset")
+
+    @property
+    def should_restrict_value(self) -> bool:
+        return self.type in ("checkbox", "radio", "select", "submit")
+
+    def validate_value(self, value: str | list[str]) -> None:
+        if self.disabled:
+            raise ValueError(f"Field '{self.name}' is disabled. You can't submit a value for it.")
+        if isinstance(value, str):
+            if not self.should_restrict_value:
+                return
+            if value not in self.allowed_values:
+                raise ValueError(f"'{value}' is not an allowed value for field '{self.name}'.")
+        elif isinstance(value, (list, tuple, set)):
+            if not self.allowed_multiple:
+                raise ValueError(f"Field '{self.name}' ({self.type}) is not allowed to have multiple values.")
+            for val in value:
+                if val not in self.allowed_values:
+                    raise ValueError(f"'{val}' is not an allowed value for {self.type} field '{self.name}'.")
+
+
+def get_boolean_attribute(tag: Tag, attribute: str) -> bool:
+    # Not sure if this is quite correct, so might need tweaking
+    return tag.get(attribute, False) is not False

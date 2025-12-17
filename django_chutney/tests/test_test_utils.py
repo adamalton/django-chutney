@@ -1,6 +1,3 @@
-# Standard Library
-from unittest import skip
-
 # Third Party
 from django.http import HttpResponse
 from django.test import Client, TestCase
@@ -97,41 +94,53 @@ class FormHelperTestCase(TestCase):
             <form method="post">
                 <input type="text" name="my-text">
                 <textarea name="my-textarea"></textarea>
+                <select name="my-select">
+                    <option value="select1">Value 1</option>
+                    <option value="select2">Value 2</option>
+                </select>
+                <input type="checkbox" name="my-checkbox" value="checkbox1">
+                <input type="checkbox" name="my-checkbox" value="checkbox2">
+                <input type="radio" name="my-radio" value="radio1">
+                <input type="radio" name="my-radio" value="radio2">
             </form>
         """
         form_data = {
             "my-text": "my value",
             "my-textarea": "my textarea value",
+            "my-select": "select1",
+            "my-checkbox": "checkbox1",
+            "my-radio": "radio1",
         }
         submitted_data = self._get_submitted_data(form_html, form_data)
         self.assertEqual(set(submitted_data.keys()), set(form_data.keys()))
         for key, value in form_data.items():
             self.assertEqual(submitted_data[key], value)
 
-    @skip("Not all of this functionality works yet.")
     def test_submits_default_values(self):
         """Test that the submit_form method submits all the default values for the form."""
         form_html = """
             <form method="post">
-                <input type="text" name="my-text" value="some-value">
-                <input type="checkbox" name="my-checkbox" value="some-value" checked>
+                <input type="hidden" name="my-hidden" value="hidden-value">
+                <input type="text" name="my-text" value="text-value">
+                <input type="checkbox" name="my-checkbox" value="checkbox-value" checked>
                 <input type="checkbox" name="my-checkbox" value="non-checked-value">
-                <input type="radio" name="my-radio" value="some-value" checked>
+                <input type="radio" name="my-radio" value="radio-value" checked>
                 <input type="radio" name="my-radio" value="non-checked-value">
-                <textarea name="my-textarea">some-value</textarea>
+                <textarea name="my-textarea">textarea-value</textarea>
                 <select name="my-select">
-                    <option value="some-value" selected>Selected value</option>
-                    <option value="non-checked-value">Non-checked value</option>
+                    <option value="select-value" selected>Selected value</option>
+                    <option value="non-selected-value">Non-selected value</option>
                 </select>
             </form>
         """
         submitted_data = self._get_submitted_data(form_html, {})
         expected_data = {
-            "my-text": "some-value",
-            "my-checkbox": "some-value",
-            "my-radio": "some-value",
-            "my-textarea": "some-value",
-            "my-select": "some-value",
+            "my-hidden": "hidden-value",
+            "my-text": "text-value",
+            "my-checkbox": "checkbox-value",
+            "my-radio": "radio-value",
+            "my-textarea": "textarea-value",
+            "my-select": "select-value",
         }
         self.assertEqual(sorted(submitted_data.keys()), sorted(expected_data.keys()))
         for key, value in expected_data.items():
