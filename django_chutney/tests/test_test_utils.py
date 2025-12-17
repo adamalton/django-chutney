@@ -76,6 +76,16 @@ class FormHelperTestCase(TestCase):
         submitted_data = _LAST_SUBMISSION["data"].copy()
         return submitted_data
 
+    def assert_data_equal(self, submitted_data: MultiValueDict, expected_data: dict):
+        """Assert that the submitted data is equal to the expected data."""
+        self.assertEqual(sorted(submitted_data.keys()), sorted(expected_data.keys()))
+        for key, expected_value in expected_data.items():
+            if isinstance(expected_value, list):
+                submitted_value = submitted_data.getlist(key)
+            else:
+                submitted_value = submitted_data[key]
+            self.assertEqual(submitted_value, expected_value, msg=f"Mismatch for field '{key}'.")
+
     def test_submits_via_correct_form_method(self):
         """Test that the submit_form method submits via the correct form method."""
         form_html = """
@@ -85,8 +95,7 @@ class FormHelperTestCase(TestCase):
         """
         submitted_data = self._get_submitted_data(form_html, {"my-text": "my value"})
         self.assertEqual(_LAST_SUBMISSION["method"], "POST")
-        self.assertEqual(set(submitted_data.keys()), {"my-text"})
-        self.assertEqual(submitted_data["my-text"], "my value")
+        self.assert_data_equal(submitted_data, {"my-text": "my value"})
 
     def test_submits_supplied_data(self):
         """Test that the submit_form method submits the supplied data."""
@@ -112,9 +121,7 @@ class FormHelperTestCase(TestCase):
             "my-radio": "radio1",
         }
         submitted_data = self._get_submitted_data(form_html, form_data)
-        self.assertEqual(set(submitted_data.keys()), set(form_data.keys()))
-        for key, value in form_data.items():
-            self.assertEqual(submitted_data[key], value)
+        self.assert_data_equal(submitted_data, form_data)
 
     def test_submits_default_values(self):
         """Test that the submit_form method submits all the default values for the form."""
@@ -131,20 +138,25 @@ class FormHelperTestCase(TestCase):
                     <option value="select-value" selected>Selected value</option>
                     <option value="non-selected-value">Non-selected value</option>
                 </select>
+                <select name="my-select-multiple" multiple>
+                    <option value="select-value-1" selected>Selected value 1</option>
+                    <option value="select-value-2" selected>Selected value 2</option>
+                    <option value="non-selected-value-1">Non-selected value 1</option>
+                    <option value="non-selected-value-2">Non-selected value 2</option>
+                </select>
             </form>
         """
         submitted_data = self._get_submitted_data(form_html, {})
         expected_data = {
             "my-hidden": "hidden-value",
             "my-text": "text-value",
-            "my-checkbox": "checkbox-value",
+            "my-checkbox": ["checkbox-value"],
             "my-radio": "radio-value",
             "my-textarea": "textarea-value",
             "my-select": "select-value",
+            "my-select-multiple": ["select-value-1", "select-value-2"],
         }
-        self.assertEqual(sorted(submitted_data.keys()), sorted(expected_data.keys()))
-        for key, value in expected_data.items():
-            self.assertEqual(submitted_data[key], value)
+        self.assert_data_equal(submitted_data, expected_data)
 
     def test_default_submit_button_value_is_submitted(self):
         """If there's only one submit button, and it has a name and value, that value should be submitted."""
@@ -176,7 +188,7 @@ class FormHelperTestCase(TestCase):
         self.assertRaises(ValueError, self._get_submitted_data, form_html, {})
         # Submitting with an explicit value should work
         submitted_data = self._get_submitted_data(form_html, {"my-submit": "submit-value-1"})
-        self.assertEqual(submitted_data["my-submit"], "submit-value-1")
+        self.assert_data_equal(submitted_data, {"my-submit": "submit-value-1"})
 
     def test_disabled_fields_are_not_submitted(self):
         """Test that disabled fields are not - and cannot be - submitted."""
@@ -186,7 +198,7 @@ class FormHelperTestCase(TestCase):
                 <input type="hidden" name="disabled-hidden" value="disabled-value" disabled>
                 <input type="checkbox" name="disabled-checkbox" value="disabled-value" disabled checked>
                 <input type="radio" name="disabled-radio" value="disabled-value" disabled checked>
-                <textarea name="disabled-textarea" value="disabled-value" disabled>
+                <textarea name="disabled-textarea" value="disabled-value" disabled></textarea>
                 <select name="disabled-select" disabled>
                     <option value="select-value" selected>Selected value</option>
                     <option value="non-selected-value">Non-selected value</option>

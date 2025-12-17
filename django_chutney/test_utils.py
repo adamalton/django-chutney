@@ -93,7 +93,12 @@ class FormHelper:
 
         # Validate that the supplied data values are allowed, and build the final data to submit.
         for key, value in data.items():
-            value = str(value)  # All HTTP GET/POST values are strings
+            # All HTTP GET/POST values are strings. Although Django allows submitting of multiple values in a list
+            if isinstance(value, (list, tuple, set)):
+                value = [str(v) for v in value]
+            else:
+                value = str(value)
+
             if key not in form_spec:
                 raise ValueError(
                     f"'{key}' is not an allowed key for the form '{form_selector}'. "
@@ -135,13 +140,19 @@ class FormHelper:
         for input_ in inputs:
             name = input_.get("name")
             typ = input_.get("type", "text")
-            if typ in ("checkbox", "radio"):
+            value = input_.get("value", "")
+            if typ == "radio":
                 if get_boolean_attribute(input_, "checked"):
-                    default_value = input_.get("value", "")
+                    default_value = value
                 else:
                     default_value = None
+            elif typ == "checkbox":
+                if get_boolean_attribute(input_, "checked"):
+                    default_value = [value]
+                else:
+                    default_value = []
             else:
-                default_value = input_.get("value", "")
+                default_value = value
             if name:
                 if name not in form_spec:
                     form_spec[name] = FieldSpec(
@@ -150,14 +161,17 @@ class FormHelper:
                         disabled=get_boolean_attribute(input_, "disabled"),
                         default_value=default_value,
                         allowed_multiple=typ == "checkbox",
-                        allowed_values=[input_.get("value", "")],  # Only relevant for checkbox/radio/submit
+                        allowed_values=[value],  # Only relevant for checkbox/radio/submit
                     )
-                else:
+                elif typ != form_spec[name].type:
+                    raise ValueError(f"Multiple different input types ({typ}, {form_spec[name]}) for field '{name}'.")
+                elif typ in ("radio", "checkbox", "submit"):
                     # This could be a susequent input for a set of radio buttons or checkboxes, or alternative submit button
-                    if input_.get("type") in ("radio", "checkbox", "submit"):
-                        form_spec[name].allowed_values.append(input_.get("value"))
-                    elif input_.get("type") != "reset":
-                        raise ValueError(f"Multiple different input types for field '{name}'.")
+                    form_spec[name].allowed_values.append(value)
+                    if typ == "checkbox" and get_boolean_attribute(input_, "checked"):
+                        form_spec[name].default_value += default_value
+                elif typ != "reset":
+                    raise ValueError(f"Multiple {typ} inputs for field '{name}'.")
 
         for textarea in textareas:
             name = textarea.get("name")
@@ -181,6 +195,7 @@ class FormHelper:
                         type="select",
                         disabled=get_boolean_attribute(select, "disabled"),
                         allowed_multiple=get_boolean_attribute(select, "multiple"),
+                        default_value=[] if get_boolean_attribute(select, "multiple") else None,
                     )
                     form_spec[name] = field_spec
                     for option in select.select("option"):
@@ -190,7 +205,10 @@ class FormHelper:
                         if selected and field_spec.default_value and not field_spec.allowed_multiple:
                             raise ValueError(f"Field '{name}' has got multiple pre-selected options.")
                         if selected:
-                            field_spec.default_value = value
+                            if field_spec.allowed_multiple:
+                                field_spec.default_value.append(value)
+                            else:
+                                field_spec.default_value = value
                 else:
                     raise ValueError(f"Multiple different select fields for field '{name}'.")
 
