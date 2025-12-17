@@ -217,3 +217,43 @@ class FormHelperTestCase(TestCase):
             "disabled-select",
         ):
             self.assertRaises(ValueError, self._get_submitted_data, form_html, {field: "my value"})
+
+    def test_readonly_fields_are_not_editable(self):
+        """Test that readonly fields can't have their values changed."""
+        form_html = """
+            <form method="post">
+                <input type="text" name="readonly-text" value="readonly-value" readonly>
+                <input type="hidden" name="readonly-hidden" value="readonly-value" readonly>
+                <input type="checkbox" name="readonly-checkbox" value="readonly-value" readonly checked>
+                <input type="radio" name="readonly-radio" value="readonly-value" readonly checked>
+                <textarea name="readonly-textarea" readonly>readonly-value</textarea>
+                <select name="readonly-select" readonly>
+                    <option value="readonly-value" selected>Selected value</option>
+                    <option value="non-selected-value">Non-selected value</option>
+                </select>
+            </form>
+        """
+        expected_data = {
+            "readonly-text": "readonly-value",
+            "readonly-hidden": "readonly-value",
+            "readonly-checkbox": ["readonly-value"],
+            "readonly-radio": "readonly-value",
+            "readonly-textarea": "readonly-value",
+            "readonly-select": "readonly-value",
+        }
+        submitted_data = self._get_submitted_data(form_html, {})
+        self.assert_data_equal(submitted_data, expected_data)
+        # Submitting with a value should raise a ValueError
+        for field in expected_data.keys():
+            with self.assertRaises(ValueError, msg=f"Readonly field '{field}' should not be editable."):
+                self._get_submitted_data(form_html, {field: "my value"})
+
+    def test_raises_error_for_multiple_incompatible_inputs(self):
+        """Test that an error is raised if there are multiple inputs with the same name but different types."""
+        form_html = """
+            <form method="post">
+                <input type="text" name="my-text" value="text-value">
+                <input type="checkbox" name="my-text" value="checkbox-value" checked>
+            </form>
+        """
+        self.assertRaises(ValueError, self._get_submitted_data, form_html, {})

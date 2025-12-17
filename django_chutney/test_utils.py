@@ -159,6 +159,7 @@ class FormHelper:
                         name=name,
                         type=typ,
                         disabled=get_boolean_attribute(input_, "disabled"),
+                        readonly=get_boolean_attribute(input_, "readonly"),
                         default_value=default_value,
                         allowed_multiple=typ == "checkbox",
                         allowed_values=[value],  # Only relevant for checkbox/radio/submit
@@ -181,6 +182,7 @@ class FormHelper:
                         name=name,
                         type="textarea",
                         disabled=get_boolean_attribute(textarea, "disabled"),
+                        readonly=get_boolean_attribute(textarea, "readonly"),
                         default_value=textarea.text,
                     )
                 else:
@@ -194,6 +196,7 @@ class FormHelper:
                         name=name,
                         type="select",
                         disabled=get_boolean_attribute(select, "disabled"),
+                        readonly=get_boolean_attribute(select, "readonly"),
                         allowed_multiple=get_boolean_attribute(select, "multiple"),
                         default_value=[] if get_boolean_attribute(select, "multiple") else None,
                     )
@@ -239,13 +242,14 @@ class FieldSpec:
     name: str  # Duplication of the dict keys, but helps with error messages.
     type: str
     disabled: bool = False
+    readonly: bool = False
     default_value: str | list[str] | None = None
     allowed_values: list[str] = field(default_factory=list)
     allowed_multiple: bool = False
 
     @property
     def editable(self) -> bool:
-        return self.type not in ("hidden", "submit", "image", "reset") and not self.disabled
+        return self.type not in ("hidden", "submit", "image", "reset") and not self.disabled and not self.readonly
 
     @property
     def should_auto_include(self) -> bool:
@@ -258,6 +262,8 @@ class FieldSpec:
     def validate_value(self, value: str | list[str]) -> None:
         if self.disabled:
             raise ValueError(f"Field '{self.name}' is disabled. You can't submit a value for it.")
+        if self.readonly and value != self.default_value:
+            raise ValueError(f"Field '{self.name}' is readonly; its value is fixed to {self.default_value}.")
         if isinstance(value, str):
             if not self.should_restrict_value:
                 return
