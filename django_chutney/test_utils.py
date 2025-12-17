@@ -1,4 +1,5 @@
 # Standard Library
+from __future__ import annotations
 from dataclasses import dataclass, field
 from urllib import parse
 import re
@@ -65,6 +66,61 @@ class FormHelper:
         soup = BeautifulSoup(content, features="html.parser")
         form = soup.select_one(form_selector)
         self.assertIsNotNone(form, msg=f"Couldn't find form '{form_selector}' in content:\n{content}")
+
+        form_spec = self.get_form_spec(form)
+
+        # Build default data from the form fields as a starting point
+        data_to_submit = {}
+        for key, field_spec in form_spec.items():
+            if field_spec.should_auto_include:
+                data_to_submit[key] = field_spec.default_value
+
+        # Get the default submit button, if there's only one submit button
+        require_explicit_submit_button_value = False
+        submit_button_names = set()
+        submit_button_specs = [spec for spec in form_spec.values() if spec.type == "submit"]
+        possible_submit_button_values = set()
+        for spec in submit_button_specs:
+            for value in spec.allowed_values:
+                possible_submit_button_values.add(value)
+        if len(possible_submit_button_values) == 1:
+            button_spec = submit_button_specs[0]
+            if button_spec.default_value:
+                data_to_submit[button_spec.name] = button_spec.default_value
+        elif len(possible_submit_button_values) > 1:
+            require_explicit_submit_button_value = True
+            submit_button_names = {spec.name for spec in submit_button_specs}
+
+        # Validate that the supplied data values are allowed, and build the final data to submit.
+        for key, value in data.items():
+            value = str(value)  # All HTTP GET/POST values are strings
+            if key not in form_spec:
+                raise ValueError(
+                    f"'{key}' is not an allowed key for the form '{form_selector}'. "
+                    f"Allowed keys are: {', '.join(form_spec.keys())}."
+                )
+            form_spec[key].validate_value(value)
+            data_to_submit[key] = value
+
+        if require_explicit_submit_button_value:
+            have_explicit_value = False
+            for name in submit_button_names:
+                if data_to_submit.get(name) is not None:
+                    have_explicit_value = True
+                    break
+            if not have_explicit_value:
+                raise ValueError(
+                    f"Form '{form_selector}' has multiple submit buttons. You must specify a value for one of them."
+                )
+        # Submit the form with our data
+        action = form.get("action") or response.request["PATH_INFO"]
+        method = form.get("method", "get").lower()
+        if method not in ("get", "post"):
+            raise ValueError(f"Form '{form_selector}' has a method of '{method}'. Must be 'get' or 'post'.")
+        return getattr(self.client, method)(action, data=data_to_submit)
+
+    def get_form_spec(self, form: BeautifulSoup) -> dict[str, FieldSpec]:
+        """Get the specification of the form fields for a form."""
         inputs = form.select("input")
         textareas = form.select("textarea")
         selects = form.select("select")
@@ -73,10 +129,6 @@ class FormHelper:
         # Look at what fields are in the form to work out what data keys are allowed and what the
         # allowed values for selects/radio buttons are. Does not yet support validation of 'range'
         # inputs.
-        # data_to_submit = {}
-        # allowed_keys = set()
-        # allowed_value_restrictions = {}
-        # fixed_values = {}
 
         form_spec: dict[str, FieldSpec] = {}
 
@@ -157,56 +209,9 @@ class FormHelper:
                     # It's allowed to have multiple submit buttons with the same name, and one value
                     # must then be specified when submitting the form.
                     form_spec[name].allowed_values.append(value)
-
-        # Build default data from the form fields as a starting point
-        data_to_submit = {}
-        for key, field_spec in form_spec.items():
-            if field_spec.should_auto_include:
-                data_to_submit[key] = field_spec.default_value
-
-        # Get the default submit button, if there's only one submit button
-        require_explicit_submit_button_value = False
-        submit_button_names = set()
-        submit_button_specs = [spec for spec in form_spec.values() if spec.type == "submit"]
-        possible_submit_button_values = set()
-        for spec in submit_button_specs:
-            for value in spec.allowed_values:
-                possible_submit_button_values.add(value)
-        if len(possible_submit_button_values) == 1:
-            button_spec = submit_button_specs[0]
-            if button_spec.default_value:
-                data_to_submit[button_spec.name] = button_spec.default_value
-        elif len(possible_submit_button_values) > 1:
-            require_explicit_submit_button_value = True
-            submit_button_names = {spec.name for spec in submit_button_specs}
-
-        # Validate that the supplied data values are allowed, and build the final data to submit.
-        for key, value in data.items():
-            value = str(value)  # All HTTP GET/POST values are strings
-            if key not in form_spec:
-                raise ValueError(
-                    f"'{key}' is not an allowed key for the form '{form_selector}'. "
-                    f"Allowed keys are: {', '.join(form_spec.keys())}."
-                )
-            form_spec[key].validate_value(value)
-            data_to_submit[key] = value
-
-        if require_explicit_submit_button_value:
-            have_explicit_value = False
-            for name in submit_button_names:
-                if data_to_submit.get(name) is not None:
-                    have_explicit_value = True
-                    break
-            if not have_explicit_value:
-                raise ValueError(
-                    f"Form '{form_selector}' has multiple submit buttons. You must specify a value for one of them."
-                )
-        # Submit the form with our data
-        action = form.get("action") or response.request["PATH_INFO"]
-        method = form.get("method", "get").lower()
-        if method not in ("get", "post"):
-            raise ValueError(f"Form '{form_selector}' has a method of '{method}'. Must be 'get' or 'post'.")
-        return getattr(self.client, method)(action, data=data_to_submit)
+                    # If there are multiple buttons with the same name, there's no explicit default
+                    form_spec[name].default_value = None
+        return form_spec
 
 
 @dataclass
