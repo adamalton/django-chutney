@@ -13,14 +13,14 @@ My personal collection of miscellaneous useful bits of code for use in Django pr
 The library is intended to be a pick and mix bucket from which you can choose to use whichever bits you want.
 
 
-## Test cases
+## Test case helpers
 
 These require BeautifulSoup to be installed:
 ```
 pip install beautifulsoup4>=4
 ```
 
-### FormCase
+### FormHelper
 
 This provides functionality to allow you to test HTML forms in a way that's more accurate than the
 standard approach with `django.test.Client`.
@@ -28,18 +28,20 @@ standard approach with `django.test.Client`.
 A common approach to testing form submissions to Django views is to submit a dict of data to the view,
 but simply doing that doesn't check that the HTML form you're rendering actually allows those values
 to be submitted. For example, your test case might submit a value for a field which isn't an option
-in the rendered `<select>`.
+in the rendered `<select>`. This approach also means that you may not be submitting values which would
+be automatically submitted by a web browser, such as hidden fields.
 
-`django_chutney.test.testcaes.FormCase` provides a way for a test case to to submit a form while
+`django_chutney.test_utils.FormHelper` provides a way for a test case to to submit a form while
 checking that the values you're submitting are actually value that the browser would allow a user
 to submit. It also automatically submits the values of any hidden inputs the form.
 
 
 
 ```python
-from django_chutney.test.testcases import FormTestCase
+from django.test import TestCase
+from django_chutney.test_utils import FormHelper
 
-class MyFormTestCase(FormTestCase):
+class MyFormTestCase(TestCase, FormHelper):
 
     def test_form_page(self):
         page_response = self.client.get(reverse("my_view"))
@@ -51,9 +53,9 @@ class MyFormTestCase(FormTestCase):
         self.assertEqual(post_response.status_code, 302)
 ```
 
-### SoupCase
+### SoupHelper
 
-This test case provides additional helper methods for testing pages using
+This class provides additional helper methods for testing pages using
 [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/).
 
 #### `assert_link_in_soup(url: str, soup: bs4.BeautifulSoup)`
@@ -72,9 +74,10 @@ Similar to `assert_text_in_soup`, but returns the first found element which matc
 
 
 ```python
-from django_chutney.test.testcases import SoupCase
+from django.test import TestCase
+from django_chutney.test_utils import SoupHelper
 
-class MyTestCase(SoupCase):
+class MyTestCase(TestCase, SoupHelper):
 
     def test_page(self):
         response = self.client.get(reverse("my_view"))

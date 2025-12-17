@@ -4,11 +4,10 @@ import re
 
 # Third Party
 from bs4 import BeautifulSoup
-from django.test import TestCase
 
 
-class SoupCase(TestCase):
-    """When I was younger I thought that a suitcase was called a soup case."""
+class SoupHelper:
+    """Mixin for TestCase classes which provides helper methods for testing pages using BeautifulSoup."""
 
     def soup(self, response):
         return BeautifulSoup(response.content.decode("utf8"), features="html.parser")
@@ -52,8 +51,8 @@ class SoupCase(TestCase):
                 return element
 
 
-class FormTestCase(TestCase):
-    """Base test case class providing utilities for testing HTML forms."""
+class FormHelper:
+    """Mixin for TestCase classes which provides helper methods for testing HTML forms."""
 
     def submit_form(self, response, form_selector: str, data: dict = None):
         """Given a CSS selector and data to submit, extract the <form/> element from the page,
