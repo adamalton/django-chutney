@@ -145,3 +145,35 @@ class FormHelperTestCase(TestCase):
         self.assertEqual(sorted(submitted_data.keys()), sorted(expected_data.keys()))
         for key, value in expected_data.items():
             self.assertEqual(submitted_data[key], value)
+
+    def test_default_submit_button_value_is_submitted(self):
+        """If there's only one submit button, and it has a name and value, that value should be submitted."""
+        form_html = """
+            <form method="post">
+                <button type="submit" name="my-submit" value="submit-value">Submit</button>
+            </form>
+        """
+        submitted_data = self._get_submitted_data(form_html, {})
+        self.assertEqual(submitted_data["my-submit"], "submit-value")
+
+        # The same should apply for an <input type="submit" />
+        form_html = """
+            <form method="post">
+                <input type="submit" name="my-submit" value="submit-value">
+            </form>
+        """
+        submitted_data = self._get_submitted_data(form_html, {})
+        self.assertEqual(submitted_data["my-submit"], "submit-value")
+
+    def test_multiple_submit_buttons_require_an_explicit_value(self):
+        """If there are multiple submit buttons, none of them should be submitted."""
+        form_html = """
+            <form method="post">
+                <button type="submit" name="my-submit" value="submit-value-1">Submit</button>
+                <button type="submit" name="my-submit" value="submit-value-2">Submit</button>
+            </form>
+        """
+        self.assertRaises(ValueError, self._get_submitted_data, form_html, {})
+        # Submitting with an explicit value should work
+        submitted_data = self._get_submitted_data(form_html, {"my-submit": "submit-value-1"})
+        self.assertEqual(submitted_data["my-submit"], "submit-value-1")

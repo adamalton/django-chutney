@@ -68,6 +68,7 @@ class FormHelper:
         inputs = form.select("input")
         textareas = form.select("textarea")
         selects = form.select("select")
+        submit_buttons = form.select("button[type='submit']")
 
         # Look at what fields are in the form to work out what data keys are allowed and what the
         # allowed values for selects/radio buttons are. Does not yet support validation of 'range'
@@ -141,11 +142,43 @@ class FormHelper:
                 else:
                     raise ValueError(f"Multiple different select fields for field '{name}'.")
 
-        # Build default data form the form fields as a starting point
+        for button in submit_buttons:
+            name = button.get("name")
+            value = button.get("value", "")
+            if name:
+                if name not in form_spec:
+                    form_spec[name] = FieldSpec(
+                        name=name,
+                        type="submit",
+                        default_value=value,
+                        allowed_values=[value],
+                    )
+                else:
+                    # It's allowed to have multiple submit buttons with the same name, and one value
+                    # must then be specified when submitting the form.
+                    form_spec[name].allowed_values.append(value)
+
+        # Build default data from the form fields as a starting point
         data_to_submit = {}
         for key, field_spec in form_spec.items():
             if field_spec.should_auto_include:
                 data_to_submit[key] = field_spec.default_value
+
+        # Get the default submit button, if there's only one submit button
+        require_explicit_submit_button_value = False
+        submit_button_names = set()
+        submit_button_specs = [spec for spec in form_spec.values() if spec.type == "submit"]
+        possible_submit_button_values = set()
+        for spec in submit_button_specs:
+            for value in spec.allowed_values:
+                possible_submit_button_values.add(value)
+        if len(possible_submit_button_values) == 1:
+            button_spec = submit_button_specs[0]
+            if button_spec.default_value:
+                data_to_submit[button_spec.name] = button_spec.default_value
+        elif len(possible_submit_button_values) > 1:
+            require_explicit_submit_button_value = True
+            submit_button_names = {spec.name for spec in submit_button_specs}
 
         # Validate that the supplied data values are allowed, and build the final data to submit.
         for key, value in data.items():
@@ -158,22 +191,16 @@ class FormHelper:
             form_spec[key].validate_value(value)
             data_to_submit[key] = value
 
-            # if key in allowed_value_restrictions:
-            #     allowed_values = allowed_value_restrictions[key]
-            #     # Support the submission of multiple values for the same key
-            #     values_to_test = value if isinstance(value, (list, tuple, set)) else [value]
-            #     for val in values_to_test:
-            #         if val not in allowed_values:
-            #             raise ValueError(
-            #                 f"'{val} is not an allowed value for field '{key}'. "
-            #                 f"Allowed values are: {', '.join(allowed_values)}."
-            #             )
-            # if key in fixed_values:
-            #     raise ValueError(
-            #         f"Form field '{key}' has a fixed value of '{fixed_values[key]}'. You can't specify a value for it."
-            #     )
-            # data_to_submit[key] = value
-
+        if require_explicit_submit_button_value:
+            have_explicit_value = False
+            for name in submit_button_names:
+                if data_to_submit.get(name) is not None:
+                    have_explicit_value = True
+                    break
+            if not have_explicit_value:
+                raise ValueError(
+                    f"Form '{form_selector}' has multiple submit buttons. You must specify a value for one of them."
+                )
         # Submit the form with our data
         action = form.get("action") or response.request["PATH_INFO"]
         method = form.get("method", "get").lower()
