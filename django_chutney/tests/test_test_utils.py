@@ -177,3 +177,31 @@ class FormHelperTestCase(TestCase):
         # Submitting with an explicit value should work
         submitted_data = self._get_submitted_data(form_html, {"my-submit": "submit-value-1"})
         self.assertEqual(submitted_data["my-submit"], "submit-value-1")
+
+    def test_disabled_fields_are_not_submitted(self):
+        """Test that disabled fields are not - and cannot be - submitted."""
+        form_html = """
+            <form method="post">
+                <input type="text" name="disabled-text" value="disabled-value" disabled>
+                <input type="hidden" name="disabled-hidden" value="disabled-value" disabled>
+                <input type="checkbox" name="disabled-checkbox" value="disabled-value" disabled checked>
+                <input type="radio" name="disabled-radio" value="disabled-value" disabled checked>
+                <textarea name="disabled-textarea" value="disabled-value" disabled>
+                <select name="disabled-select" disabled>
+                    <option value="select-value" selected>Selected value</option>
+                    <option value="non-selected-value">Non-selected value</option>
+                </select>
+            </form>
+        """
+        submitted_data = self._get_submitted_data(form_html, {})
+        self.assertEqual(submitted_data, {})
+        # Submitting with a value should raise a ValueError
+        for field in (
+            "disabled-text",
+            "disabled-hidden",
+            "disabled-checkbox",
+            "disabled-radio",
+            "disabled-textarea",
+            "disabled-select",
+        ):
+            self.assertRaises(ValueError, self._get_submitted_data, form_html, {field: "my value"})

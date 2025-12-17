@@ -231,7 +231,7 @@ class FieldSpec:
 
     @property
     def should_auto_include(self) -> bool:
-        return self.default_value is not None and self.type not in ("submit", "reset")
+        return self.default_value is not None and self.type not in ("submit", "reset") and not self.disabled
 
     @property
     def should_restrict_value(self) -> bool:
