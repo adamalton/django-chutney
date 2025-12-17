@@ -112,6 +112,7 @@ class FormHelper:
 
         # Validate that the supplied data values are allowed, and build the final data to submit.
         for key, value in data.items():
+            value = str(value)  # All HTTP GET/POST values are strings
             if key not in allowed_keys:
                 raise ValueError(
                     f"'{key}' is not an allowed key for the form '{form_selector}'. "
